@@ -102,6 +102,9 @@ function OrderMenuContent() {
   const [showTableModal, setShowTableModal] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
 
+  // Prevent re-initialization on searchParams change (e.g. after router.replace)
+  const initialized = useRef(false);
+
   // Category drag scroll refs
   const tabsRef = useRef<HTMLDivElement>(null);
   const isDown = useRef(false);
@@ -110,6 +113,11 @@ function OrderMenuContent() {
   const dragMoved = useRef(false);
 
   useEffect(() => {
+    // Only run once — router.replace() changes searchParams but we must NOT re-init,
+    // because that would reset activeCategory back to the first tab (Offers).
+    if (initialized.current) return;
+    initialized.current = true;
+
     const init = async () => {
       try {
         await db.sync();
@@ -172,7 +180,8 @@ function OrderMenuContent() {
       }
     };
     init();
-  }, [searchParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSelectTable = (tableNum: number) => {
     const matchedTable = tables.find(t => t.table_number === tableNum);
