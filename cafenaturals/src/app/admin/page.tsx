@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { 
-  Coffee, History, Clock, TrendingUp, LogOut, Percent, RefreshCw, Wallet, 
-  Settings, Key, ShieldCheck, Trash2, Eye, EyeOff, Smartphone, Monitor, UserCheck, CheckCircle2, X, Lock
+  Coffee, History, Clock, TrendingUp, LogOut, Percent, RefreshCw, Wallet,
+  Settings, Key, ShieldCheck, Trash2, Eye, EyeOff, Smartphone, Monitor, UserCheck, CheckCircle2, X
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { DateTimeDisplay } from '@/components/DateTimeDisplay';
@@ -45,18 +45,23 @@ export default function TableBoardPage() {
   const [sessionToForceLogout, setSessionToForceLogout] = useState<{ id: string; device: string } | null>(null);
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
 
-  // Security gate for Login History tab (requires inventory password)
-  const [isAuditUnlocked, setIsAuditUnlocked] = useState(false);
-  const [auditPasscode, setAuditPasscode] = useState('');
-  const [showAuditPasscode, setShowAuditPasscode] = useState(false);
-  const [auditPassError, setAuditPassError] = useState('');
+  // Admin gate — must enter admin (inventory) password to open Settings
+  const [showAdminGate, setShowAdminGate] = useState(false);
+  const [adminGatePass, setAdminGatePass] = useState('');
+  const [showAdminGatePass, setShowAdminGatePass] = useState(false);
+  const [adminGateError, setAdminGateError] = useState('');
 
+  // Password forms: old + new + confirm for both
+  const [staffOld, setStaffOld] = useState('');
   const [staffNew, setStaffNew] = useState('');
   const [staffConfirm, setStaffConfirm] = useState('');
+  const [showStaffOld, setShowStaffOld] = useState(false);
   const [showStaffNew, setShowStaffNew] = useState(false);
   const [staffMsg, setStaffMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [invOld, setInvOld] = useState('');
   const [invNew, setInvNew] = useState('');
   const [invConfirm, setInvConfirm] = useState('');
+  const [showInvOld, setShowInvOld] = useState(false);
   const [showInvNew, setShowInvNew] = useState(false);
   const [invMsg, setInvMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -73,17 +78,16 @@ export default function TableBoardPage() {
   };
 
   useEffect(() => {
-    if (showSettings && settingsTab === 'history' && isAuditUnlocked) {
-      fetchLoginLogs();
-    }
-  }, [showSettings, settingsTab, isAuditUnlocked]);
+    // Load history immediately when tab opens (settings itself is admin-gated, no 2nd password needed)
+    if (showSettings && settingsTab === 'history') fetchLoginLogs();
+  }, [showSettings, settingsTab]);
 
   const handleCloseSettings = () => {
     setShowSettings(false);
-    setIsAuditUnlocked(false);
-    setAuditPasscode('');
-    setAuditPassError('');
+    setAdminGatePass(''); setAdminGateError('');
     setLoginLogs([]);
+    setStaffOld(''); setStaffNew(''); setStaffConfirm(''); setStaffMsg(null);
+    setInvOld(''); setInvNew(''); setInvConfirm(''); setInvMsg(null);
   };
 
   const handleForceLogout = async (sessionId: string) => {
@@ -98,22 +102,26 @@ export default function TableBoardPage() {
 
   const handleChangeStaffPass = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!staffNew.trim()) { setStaffMsg({ ok: false, text: 'Password cannot be empty.' }); return; }
-    if (staffNew !== staffConfirm) { setStaffMsg({ ok: false, text: 'Passwords do not match.' }); return; }
+    if (!staffOld.trim()) { setStaffMsg({ ok: false, text: 'Enter your current password first.' }); return; }
+    if (!verifyPassword('staff', staffOld)) { setStaffMsg({ ok: false, text: 'Current password is incorrect.' }); return; }
+    if (!staffNew.trim()) { setStaffMsg({ ok: false, text: 'New password cannot be empty.' }); return; }
+    if (staffNew !== staffConfirm) { setStaffMsg({ ok: false, text: 'New passwords do not match.' }); return; }
     if (staffNew.length < 4) { setStaffMsg({ ok: false, text: 'Must be at least 4 characters.' }); return; }
     updatePassword('staff', staffNew);
-    setStaffMsg({ ok: true, text: 'Staff password updated successfully!' });
-    setStaffNew(''); setStaffConfirm('');
+    setStaffMsg({ ok: true, text: 'Staff password updated!' });
+    setStaffOld(''); setStaffNew(''); setStaffConfirm('');
   };
 
   const handleChangeInvPass = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!invNew.trim()) { setInvMsg({ ok: false, text: 'Password cannot be empty.' }); return; }
-    if (invNew !== invConfirm) { setInvMsg({ ok: false, text: 'Passwords do not match.' }); return; }
+    if (!invOld.trim()) { setInvMsg({ ok: false, text: 'Enter your current password first.' }); return; }
+    if (!verifyPassword('inventory', invOld)) { setInvMsg({ ok: false, text: 'Current password is incorrect.' }); return; }
+    if (!invNew.trim()) { setInvMsg({ ok: false, text: 'New password cannot be empty.' }); return; }
+    if (invNew !== invConfirm) { setInvMsg({ ok: false, text: 'New passwords do not match.' }); return; }
     if (invNew.length < 4) { setInvMsg({ ok: false, text: 'Must be at least 4 characters.' }); return; }
     updatePassword('inventory', invNew);
-    setInvMsg({ ok: true, text: 'Inventory password updated successfully!' });
-    setInvNew(''); setInvConfirm('');
+    setInvMsg({ ok: true, text: 'Admin password updated!' });
+    setInvOld(''); setInvNew(''); setInvConfirm('');
   };
 
   const playOrderSound = () => {
@@ -259,9 +267,9 @@ export default function TableBoardPage() {
               <span className="hidden md:inline">Logout</span>
             </button>
             <button
-              onClick={() => { setShowSettings(true); setStaffMsg(null); setInvMsg(null); }}
+              onClick={() => { setShowAdminGate(true); setAdminGatePass(''); setAdminGateError(''); }}
               className="flex items-center gap-1 bg-gradient-to-r from-[#E8D9C5] to-[#C8A97E] hover:from-[#C8A97E] hover:to-[#8B6B4A] text-[#3E3023] hover:text-[#FFFDF9] p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-semibold font-sans transition-all shadow-sm cursor-pointer"
-              title="Admin & Security Settings"
+              title="Admin Settings (Password Required)"
             >
               <Settings className="h-4 w-4 shrink-0" />
             </button>
@@ -428,136 +436,73 @@ export default function TableBoardPage() {
                     </div>
                     <form onSubmit={handleChangeStaffPass} className="space-y-2.5">
                       <div className="relative">
-                        <input
-                          type={showStaffNew ? 'text' : 'password'}
-                          value={staffNew}
+                        <input type={showStaffOld ? 'text' : 'password'} value={staffOld}
+                          onChange={e => { setStaffOld(e.target.value); setStaffMsg(null); }}
+                          placeholder="Current staff password"
+                          className="w-full px-3 py-2.5 pr-10 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono" />
+                        <button type="button" tabIndex={-1} onClick={() => setShowStaffOld(p => !p)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6D5B4A] hover:text-[#3E3023] cursor-pointer">
+                          {showStaffOld ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <div className="h-px bg-[#E6D8C8]" />
+                      <div className="relative">
+                        <input type={showStaffNew ? 'text' : 'password'} value={staffNew}
                           onChange={e => { setStaffNew(e.target.value); setStaffMsg(null); }}
                           placeholder="New staff password"
-                          className="w-full px-3 py-2.5 pr-10 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono"
-                        />
+                          className="w-full px-3 py-2.5 pr-10 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono" />
                         <button type="button" tabIndex={-1} onClick={() => setShowStaffNew(p => !p)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6D5B4A] hover:text-[#3E3023] cursor-pointer">
                           {showStaffNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
-                      <input
-                        type={showStaffNew ? 'text' : 'password'}
-                        value={staffConfirm}
+                      <input type={showStaffNew ? 'text' : 'password'} value={staffConfirm}
                         onChange={e => { setStaffConfirm(e.target.value); setStaffMsg(null); }}
                         placeholder="Confirm new staff password"
-                        className="w-full px-3 py-2.5 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono"
-                      />
-                      {staffMsg && (
-                        <p className={`text-xs flex items-center gap-1 font-sans ${staffMsg.ok ? 'text-green-600' : 'text-red-600'}`}>
-                          {staffMsg.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                          {staffMsg.text}
-                        </p>
-                      )}
-                      <button type="submit"
-                        className="w-full bg-[#3E3023] hover:bg-[#2B2117] text-white font-bold uppercase tracking-wider py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-sm">
-                        Update Staff Password
-                      </button>
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono" />
+                      {staffMsg && (<p className={`text-xs flex items-center gap-1 font-sans ${staffMsg.ok ? 'text-green-600' : 'text-red-600'}`}>
+                        {staffMsg.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}{staffMsg.text}</p>)}
+                      <button type="submit" className="w-full bg-[#3E3023] hover:bg-[#2B2117] text-white font-bold uppercase tracking-wider py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-sm">Update Staff Password</button>
                     </form>
                   </div>
-
                   <div className="h-px bg-[#E6D8C8]" />
-
-                  {/* Inventory Password */}
+                  {/* Admin Password */}
                   <div className="space-y-3">
                     <div>
-                      <h3 className="font-sans font-bold text-sm text-[#3E3023]">Inventory &amp; Financial Password</h3>
-                      <p className="text-xs text-[#6D5B4A] mt-0.5">Required every time you open /inventory and access audit logs.</p>
+                      <h3 className="font-sans font-bold text-sm text-[#3E3023]">Admin (Inventory) Password</h3>
+                      <p className="text-xs text-[#6D5B4A] mt-0.5">Required to open Settings and access /inventory.</p>
                     </div>
                     <form onSubmit={handleChangeInvPass} className="space-y-2.5">
                       <div className="relative">
-                        <input
-                          type={showInvNew ? 'text' : 'password'}
-                          value={invNew}
+                        <input type={showInvOld ? 'text' : 'password'} value={invOld}
+                          onChange={e => { setInvOld(e.target.value); setInvMsg(null); }}
+                          placeholder="Current admin password"
+                          className="w-full px-3 py-2.5 pr-10 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono" />
+                        <button type="button" tabIndex={-1} onClick={() => setShowInvOld(p => !p)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6D5B4A] hover:text-[#3E3023] cursor-pointer">
+                          {showInvOld ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <div className="h-px bg-[#E6D8C8]" />
+                      <div className="relative">
+                        <input type={showInvNew ? 'text' : 'password'} value={invNew}
                           onChange={e => { setInvNew(e.target.value); setInvMsg(null); }}
-                          placeholder="New inventory password"
-                          className="w-full px-3 py-2.5 pr-10 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono"
-                        />
+                          placeholder="New admin password"
+                          className="w-full px-3 py-2.5 pr-10 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono" />
                         <button type="button" tabIndex={-1} onClick={() => setShowInvNew(p => !p)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6D5B4A] hover:text-[#3E3023] cursor-pointer">
                           {showInvNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
-                      <input
-                        type={showInvNew ? 'text' : 'password'}
-                        value={invConfirm}
+                      <input type={showInvNew ? 'text' : 'password'} value={invConfirm}
                         onChange={e => { setInvConfirm(e.target.value); setInvMsg(null); }}
-                        placeholder="Confirm new inventory password"
-                        className="w-full px-3 py-2.5 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono"
-                      />
-                      {invMsg && (
-                        <p className={`text-xs flex items-center gap-1 font-sans ${invMsg.ok ? 'text-green-600' : 'text-red-600'}`}>
-                          {invMsg.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                          {invMsg.text}
-                        </p>
-                      )}
-                      <button type="submit"
-                        className="w-full bg-[#3E3023] hover:bg-[#2B2117] text-white font-bold uppercase tracking-wider py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-sm">
-                        Update Inventory Password
-                      </button>
+                        placeholder="Confirm new admin password"
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono" />
+                      {invMsg && (<p className={`text-xs flex items-center gap-1 font-sans ${invMsg.ok ? 'text-green-600' : 'text-red-600'}`}>
+                        {invMsg.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}{invMsg.text}</p>)}
+                      <button type="submit" className="w-full bg-[#3E3023] hover:bg-[#2B2117] text-white font-bold uppercase tracking-wider py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-sm">Update Admin Password</button>
                     </form>
                   </div>
-                </div>
-              ) : !isAuditUnlocked ? (
-                /* Password Gate for Login History & Audit Log */
-                <div className="py-8 px-4 flex flex-col items-center justify-center text-center space-y-4 max-w-sm mx-auto">
-                  <div className="p-3 bg-[#E8D9C5] text-[#3E3023] rounded-full border border-[#8B6B4A]/20">
-                    <Lock className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="font-serif font-bold text-base text-[#3E3023]">Protected Session Audit Log</h3>
-                    <p className="text-xs text-[#6D5B4A] mt-1 font-sans leading-relaxed">
-                      Enter your Inventory &amp; Financial Password to view active devices and staff login history.
-                    </p>
-                  </div>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (verifyPassword('inventory', auditPasscode)) {
-                        setIsAuditUnlocked(true);
-                        setAuditPassError('');
-                        fetchLoginLogs();
-                      } else {
-                        setAuditPassError('Incorrect inventory password.');
-                      }
-                    }}
-                    className="w-full space-y-3"
-                  >
-                    <div className="relative">
-                      <input
-                        type={showAuditPasscode ? 'text' : 'password'}
-                        value={auditPasscode}
-                        onChange={e => { setAuditPasscode(e.target.value); setAuditPassError(''); }}
-                        placeholder="Enter inventory password"
-                        className="w-full px-3 py-2.5 pr-10 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        onClick={() => setShowAuditPasscode(p => !p)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6D5B4A] hover:text-[#3E3023] cursor-pointer"
-                      >
-                        {showAuditPasscode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    {auditPassError && (
-                      <p className="text-xs text-red-600 font-sans font-bold flex items-center justify-center gap-1">
-                        <X className="h-3.5 w-3.5" />
-                        {auditPassError}
-                      </p>
-                    )}
-                    <button
-                      type="submit"
-                      className="w-full bg-[#3E3023] hover:bg-[#2B2117] text-white font-bold uppercase tracking-wider py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-sm font-sans"
-                    >
-                      Unlock Audit Log
-                    </button>
-                  </form>
                 </div>
               ) : (
                 /* Login History & Devices Tab Content */
@@ -734,6 +679,48 @@ export default function TableBoardPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Admin Gate Modal ───────────────────────────────────────── */}
+      {showAdminGate && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={() => { setShowAdminGate(false); setAdminGatePass(''); setAdminGateError(''); }}>
+          <div className="bg-[#FFFDF9] border border-[#E6D8C8] rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-[#E8D9C5] text-[#3E3023] shrink-0"><Settings className="h-5 w-5" /></div>
+              <div>
+                <h3 className="font-serif font-bold text-base text-[#3E3023]">Admin Access Required</h3>
+                <p className="text-xs text-[#6D5B4A] font-sans mt-0.5">Enter admin password to open Settings.</p>
+              </div>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (verifyPassword('inventory', adminGatePass)) {
+                setShowAdminGate(false); setAdminGatePass(''); setAdminGateError('');
+                setShowSettings(true); setSettingsTab('passwords');
+              } else { setAdminGateError('Incorrect admin password.'); }
+            }} className="space-y-3">
+              <div className="relative">
+                <input type={showAdminGatePass ? 'text' : 'password'} value={adminGatePass}
+                  onChange={e => { setAdminGatePass(e.target.value); setAdminGateError(''); }}
+                  placeholder="Enter admin password" autoFocus
+                  className="w-full px-3 py-2.5 pr-10 rounded-xl border border-[#E6D8C8] bg-[#FFFDF9] text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#8B6B4A] font-mono" />
+                <button type="button" tabIndex={-1} onClick={() => setShowAdminGatePass(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6D5B4A] hover:text-[#3E3023] cursor-pointer">
+                  {showAdminGatePass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {adminGateError && <p className="text-xs text-red-600 font-sans font-bold flex items-center justify-center gap-1"><X className="h-3.5 w-3.5" />{adminGateError}</p>}
+              <div className="flex gap-2.5">
+                <button type="button" onClick={() => { setShowAdminGate(false); setAdminGatePass(''); setAdminGateError(''); }}
+                  className="flex-1 py-2.5 rounded-xl border border-[#E6D8C8] text-xs font-bold text-[#6D5B4A] hover:bg-[#F9F6F1] transition-colors cursor-pointer font-sans">Cancel</button>
+                <button type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-[#3E3023] hover:bg-[#2B2117] text-white text-xs font-bold transition-all shadow-md cursor-pointer font-sans">Unlock Settings</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

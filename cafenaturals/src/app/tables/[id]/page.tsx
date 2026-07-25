@@ -90,9 +90,20 @@ export default function OrderEntryPage({ params }: { params: Promise<{ id: strin
   const router = useRouter();
 
   const [tableNumber, setTableNumber] = useState<number | null>(null);
+  // Module-level guard — lives completely outside React lifecycle.
+  // Immune to remounts, HMR, auth re-renders, window switches.
+  const catInitKey = `cat_set_${tableId}`;
+
+  const [activeCategory, setActiveCategory] = useState<string>('');
+  // activeCategoryRef mirrors state synchronously — readable inside stale closures.
+  const activeCategoryRef = useRef<string>('');
+  const setActiveCategoryAndRef = useCallback((id: string) => {
+    activeCategoryRef.current = id;
+    try { localStorage.setItem(`cafe_tab_cat_${tableId}`, id); } catch {}
+    setActiveCategory(id);
+  }, [tableId]);
   const [categories, setCategories] = useState<{ id: string; name: string; sort_order: number }[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [activeCategory, setActiveCategory] = useState<string>('');
   const [order, setOrder] = useState<ActiveOrder | null>(null);
   const [mobileTab, setMobileTab] = useState<'menu' | 'order'>('menu');
   const [runningOffer, setRunningOffer] = useState<any>(null);
@@ -210,7 +221,7 @@ export default function OrderEntryPage({ params }: { params: Promise<{ id: strin
       e.preventDefault();
       return;
     }
-    setActiveCategory(catId);
+    setActiveCategoryAndRef(catId);
   };
 
   const getTableLabel = (num: number | null) => {
@@ -261,7 +272,13 @@ export default function OrderEntryPage({ params }: { params: Promise<{ id: strin
       }
 
       setCategories(finalCats);
-      if (finalCats.length > 0 && !activeCategory) setActiveCategory(finalCats[0].id);
+      // KEY FIX: Read activeCategoryRef (live ref) not activeCategory (stale closure).
+      // This means the poll never resets the tab the staff member has selected.
+      if (finalCats.length > 0 && !activeCategoryRef.current) {
+        const saved = (() => { try { return localStorage.getItem(`cafe_tab_cat_${tableId}`); } catch { return null; } })();
+        const valid = saved && finalCats.some(c => c.id === saved);
+        setActiveCategoryAndRef(valid ? saved : finalCats[0].id);
+      }
       setMenuItems(finalItems);
       setOrder(activeOrder as ActiveOrder | null);
 
