@@ -231,8 +231,28 @@ export default function OrderEntryPage({ params }: { params: Promise<{ id: strin
   };
 
 
+  const pendingActionsRef = useRef(0);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const scheduleOrderSync = useCallback(() => {
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = setTimeout(async () => {
+      if (pendingActionsRef.current === 0) {
+        try {
+          const updated = await db.getActiveOrder(tableId);
+          if (updated && pendingActionsRef.current === 0) {
+            setOrder(updated as ActiveOrder);
+          }
+        } catch (e) {
+          // ignore sync failure
+        }
+      }
+    }, 500);
+  }, [tableId]);
+
   // ── load everything ─────────────────────────────────────────────
   const load = useCallback(async (silent = false) => {
+    if (silent && pendingActionsRef.current > 0) return;
     try {
       await db.sync();
       const todayDate = new Date().toLocaleDateString('en-CA');
@@ -418,15 +438,15 @@ export default function OrderEntryPage({ params }: { params: Promise<{ id: strin
 
     setOrder(prev => prev ? { ...prev, items: updatedItems } : null);
 
-    // 2. Perform DB update in background asynchronously
+    // 2. Perform DB update asynchronously with pending lock
+    pendingActionsRef.current++;
     try {
       await db.addOrderItem(order.id, item.id, 1, null, item.price);
-      const updated = await db.getActiveOrder(tableId);
-      if (updated) setOrder(updated as ActiveOrder);
     } catch (err) {
       console.error('Failed to add item:', err);
-      const u = await db.getActiveOrder(tableId);
-      if (u) setOrder(u as ActiveOrder);
+    } finally {
+      pendingActionsRef.current = Math.max(0, pendingActionsRef.current - 1);
+      scheduleOrderSync();
     }
   };
 
@@ -443,29 +463,34 @@ export default function OrderEntryPage({ params }: { params: Promise<{ id: strin
 
     setOrder(prev => prev ? { ...prev, items: updatedItems } : null);
 
-    // 2. Perform DB update in background asynchronously
+    // 2. Perform DB update asynchronously with pending lock
+    pendingActionsRef.current++;
     try {
       await db.updateOrderItem(oi.id, newQty, oi.notes);
-      const updated = await db.getActiveOrder(tableId);
-      if (updated) setOrder(updated as ActiveOrder);
     } catch (err) {
       console.error('Failed to change quantity:', err);
-      const u = await db.getActiveOrder(tableId);
-      if (u) setOrder(u as ActiveOrder);
+    } finally {
+      pendingActionsRef.current = Math.max(0, pendingActionsRef.current - 1);
+      scheduleOrderSync();
     }
   };
 
   const saveNote = async (oi: OrderItemWithMenu, text: string) => {
     setNotes(p => ({ ...p, [oi.id]: text }));
-    // Instant Optimistic Update
     setOrder(prev => prev ? {
       ...prev,
       items: prev.items.map(i => i.id === oi.id ? { ...i, notes: text || null } : i)
     } : null);
 
+    pendingActionsRef.current++;
     try {
       await db.updateOrderItem(oi.id, oi.quantity, text || null);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      pendingActionsRef.current = Math.max(0, pendingActionsRef.current - 1);
+      scheduleOrderSync();
+    }
   };
 
   const startTableTimer = async () => {
