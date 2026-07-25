@@ -1,0 +1,19 @@
+{
+  "name": "Cafe Naturaleza Billing & Ordering",
+  "short_name": "Cafe Naturaleza",
+  "description": "Internal Order Management and Billing System for Cafe Naturaleza, Ishvarpur",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F9F6F1",
+  "theme_color": "#C8A97E",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/cafe_logo_new.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
