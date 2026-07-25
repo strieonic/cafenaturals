@@ -1,6 +1,3 @@
 {
-  "buildCommand": "cd cafenaturals && npm install && npm run build",
-  "outputDirectory": "cafenaturals/.next",
-  "installCommand": "cd cafenaturals && npm install",
   "framework": "nextjs"
 }
