@@ -164,6 +164,9 @@ export default function TableBoardPage() {
       setIsLocked(status.isLocked);
       const data = await db.getTables();
       setTables(data as TableData[]);
+      data.forEach((t: TableData) => {
+        router.prefetch(`/tables/${t.id}`);
+      });
       const currentTotal = data.reduce((sum, t) => sum + (t.activeOrder?.itemsCount || 0), 0);
       setPrevTotalItems(prev => {
         if (prev !== null && currentTotal > prev) playOrderSound();

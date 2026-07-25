@@ -85,6 +85,13 @@ const getItemImage = (itemName: string | undefined, categoryName: string | undef
   return getCategoryImage(categoryName);
 };
 
+let globalCatsCache: any[] | null = null;
+let globalItemsCache: any[] | null = null;
+let globalOfferCache: any | null = null;
+let globalStatusCache: { isLocked: boolean } | null = null;
+let globalStaticCacheTime = 0;
+const STATIC_CACHE_TTL = 3 * 60 * 1000; // 3 minutes cache
+
 export default function OrderEntryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: tableId } = use(params);
   const router = useRouter();
@@ -254,16 +261,42 @@ export default function OrderEntryPage({ params }: { params: Promise<{ id: strin
   const load = useCallback(async (silent = false) => {
     if (silent && pendingActionsRef.current > 0) return;
     try {
-      await db.sync();
       const todayDate = new Date().toLocaleDateString('en-CA');
-      const [tableData, cats, items, activeOrder, offer, status] = await Promise.all([
-        db.getTable(tableId),
-        db.getCategories(),
-        db.getMenuItems(),
-        db.getActiveOrder(tableId),
-        db.getOffer(),
-        db.getSystemStatus(todayDate),
-      ]);
+      const now = Date.now();
+      const isCacheValid = globalCatsCache && globalItemsCache && (now - globalStaticCacheTime < STATIC_CACHE_TTL);
+
+      let tableData: any;
+      let activeOrder: any;
+      let cats: any[];
+      let items: any[];
+      let offer: any;
+      let status: any;
+
+      if (isCacheValid) {
+        // High-speed path: Only fetch table-specific data (<50ms!)
+        [tableData, activeOrder] = await Promise.all([
+          db.getTable(tableId),
+          db.getActiveOrder(tableId)
+        ]);
+        cats = globalCatsCache!;
+        items = globalItemsCache!;
+        offer = globalOfferCache;
+        status = globalStatusCache || { isLocked: false };
+      } else {
+        [tableData, cats, items, activeOrder, offer, status] = await Promise.all([
+          db.getTable(tableId),
+          db.getCategories(),
+          db.getMenuItems(),
+          db.getActiveOrder(tableId),
+          db.getOffer(),
+          db.getSystemStatus(todayDate),
+        ]);
+        globalCatsCache = cats;
+        globalItemsCache = items;
+        globalOfferCache = offer;
+        globalStatusCache = status;
+        globalStaticCacheTime = now;
+      }
       
       setIsLocked(status.isLocked);
 
