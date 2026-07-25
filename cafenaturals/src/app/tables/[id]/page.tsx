@@ -382,31 +382,89 @@ export default function OrderEntryPage({ params }: { params: Promise<{ id: strin
 
   // ── actions ──────────────────────────────────────────────────────
   const addItem = async (item: MenuItem) => {
-    if (!order || busy) return;
-    setBusy(true);
+    if (!order) return;
+
+    // 1. Instant Optimistic State Update (0ms latency for staff tap)
+    const existingIndex = order.items.findIndex(i => i.menu_item_id === item.id);
+    let updatedItems = [...order.items];
+
+    if (existingIndex >= 0) {
+      const existing = updatedItems[existingIndex];
+      updatedItems[existingIndex] = {
+        ...existing,
+        quantity: existing.quantity + 1,
+      };
+    } else {
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      updatedItems.push({
+        id: tempId,
+        order_id: order.id,
+        menu_item_id: item.id,
+        quantity: 1,
+        price_at_order: item.price,
+        notes: null,
+        menu_items: {
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          category_id: item.category_id,
+          sort_order: item.sort_order ?? 0,
+          is_veg: item.is_veg ?? true,
+          is_available: item.is_available ?? true,
+          description: item.description ?? ''
+        }
+      });
+    }
+
+    setOrder(prev => prev ? { ...prev, items: updatedItems } : null);
+
+    // 2. Perform DB update in background asynchronously
     try {
       await db.addOrderItem(order.id, item.id, 1, null, item.price);
       const updated = await db.getActiveOrder(tableId);
-      setOrder(updated as ActiveOrder);
-    } finally { setBusy(false); }
+      if (updated) setOrder(updated as ActiveOrder);
+    } catch (err) {
+      console.error('Failed to add item:', err);
+      const u = await db.getActiveOrder(tableId);
+      if (u) setOrder(u as ActiveOrder);
+    }
   };
 
   const changeQty = async (oi: OrderItemWithMenu, newQty: number) => {
-    if (busy) return;
-    setBusy(true);
+    if (!order) return;
+
+    // 1. Instant Optimistic UI Update (0ms latency for quantity buttons)
+    let updatedItems: OrderItemWithMenu[] = [];
+    if (newQty <= 0) {
+      updatedItems = order.items.filter(i => i.id !== oi.id);
+    } else {
+      updatedItems = order.items.map(i => i.id === oi.id ? { ...i, quantity: newQty } : i);
+    }
+
+    setOrder(prev => prev ? { ...prev, items: updatedItems } : null);
+
+    // 2. Perform DB update in background asynchronously
     try {
       await db.updateOrderItem(oi.id, newQty, oi.notes);
       const updated = await db.getActiveOrder(tableId);
-      setOrder(updated as ActiveOrder);
-    } finally { setBusy(false); }
+      if (updated) setOrder(updated as ActiveOrder);
+    } catch (err) {
+      console.error('Failed to change quantity:', err);
+      const u = await db.getActiveOrder(tableId);
+      if (u) setOrder(u as ActiveOrder);
+    }
   };
 
   const saveNote = async (oi: OrderItemWithMenu, text: string) => {
     setNotes(p => ({ ...p, [oi.id]: text }));
+    // Instant Optimistic Update
+    setOrder(prev => prev ? {
+      ...prev,
+      items: prev.items.map(i => i.id === oi.id ? { ...i, notes: text || null } : i)
+    } : null);
+
     try {
       await db.updateOrderItem(oi.id, oi.quantity, text || null);
-      const updated = await db.getActiveOrder(tableId);
-      setOrder(updated as ActiveOrder);
     } catch (err) { console.error(err); }
   };
 
