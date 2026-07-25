@@ -548,8 +548,10 @@ export default function TableBoardPage() {
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {loginLogs.filter(l => l.status === 'active').map(session => {
-                          const currentTabId = typeof window !== 'undefined' ? sessionStorage.getItem('cafe_tab_session_id') : null;
-                          const isCurrentWindow = currentTabId && (session.id === currentTabId || session.sessionId === currentTabId);
+                          const currentTabId = typeof window !== 'undefined' 
+                            ? (sessionStorage.getItem('cafe_tab_session_id') || (() => { try { return JSON.parse(localStorage.getItem('cafe_blossom_auth') || '{}')?.sessionId; } catch { return null; } })()) 
+                            : null;
+                          const isCurrentWindow = currentTabId && (session.id === currentTabId || session.sessionId === currentTabId || session._id === currentTabId);
 
                           return (
                             <div key={session.id} className={`bg-[#FFFDF9] border ${isCurrentWindow ? 'border-blue-400 bg-blue-50/20 ring-1 ring-blue-300' : 'border-green-200'} rounded-xl p-3.5 shadow-sm space-y-2.5 relative overflow-hidden`}>

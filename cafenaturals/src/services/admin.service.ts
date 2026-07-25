@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import dbConnect from '../lib/mongodb';
 import DayClose from '../models/DayClose';
 import DayOpen from '../models/DayOpen';
@@ -194,7 +195,9 @@ export const adminService = {
 
   async recordLoginSession(deviceInfo: string, ipAddress: string): Promise<string> {
     await dbConnect();
+    const newSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const session = await LoginLog.create({
+      sessionId: newSessionId,
       user_role: 'Staff Portal',
       device_info: deviceInfo || 'Unknown Device',
       ip_address: ipAddress || 'Local Network',
@@ -202,13 +205,18 @@ export const adminService = {
       last_seen_at: new Date(),
       status: 'active'
     });
-    return session._id.toString();
+    return session.sessionId || session._id.toString();
   },
 
   async sendSessionHeartbeat(sessionId: string): Promise<{ valid: boolean; forceLogout: boolean }> {
     if (!sessionId) return { valid: false, forceLogout: false };
     await dbConnect();
-    const session = await LoginLog.findById(sessionId);
+    const session = await LoginLog.findOne({
+      $or: [
+        { sessionId: sessionId },
+        { _id: mongoose.Types.ObjectId.isValid(sessionId) ? sessionId : null }
+      ]
+    });
     if (!session) return { valid: false, forceLogout: false };
 
     if (session.status === 'force_logged_out') {
@@ -227,19 +235,39 @@ export const adminService = {
   async recordLogoutSession(sessionId: string): Promise<void> {
     if (!sessionId) return;
     await dbConnect();
-    await LoginLog.findByIdAndUpdate(sessionId, {
-      status: 'logged_out',
-      logout_at: new Date()
-    });
+    await LoginLog.updateMany(
+      {
+        $or: [
+          { sessionId: sessionId },
+          { _id: mongoose.Types.ObjectId.isValid(sessionId) ? sessionId : null }
+        ]
+      },
+      {
+        $set: {
+          status: 'logged_out',
+          logout_at: new Date()
+        }
+      }
+    );
   },
 
   async forceLogoutSession(sessionId: string): Promise<void> {
     if (!sessionId) return;
     await dbConnect();
-    await LoginLog.findByIdAndUpdate(sessionId, {
-      status: 'force_logged_out',
-      logout_at: new Date()
-    });
+    await LoginLog.updateMany(
+      {
+        $or: [
+          { sessionId: sessionId },
+          { _id: mongoose.Types.ObjectId.isValid(sessionId) ? sessionId : null }
+        ]
+      },
+      {
+        $set: {
+          status: 'force_logged_out',
+          logout_at: new Date()
+        }
+      }
+    );
   },
 
   async getLoginSessions(): Promise<any[]> {
@@ -254,10 +282,15 @@ export const adminService = {
     );
 
     const logs = await LoginLog.find({}).sort({ login_at: -1 }).limit(100).lean();
-    return logs.map(l => ({
-      ...l,
-      id: l._id.toString()
-    }));
+    return logs.map(l => {
+      const idStr = l.sessionId || l._id.toString();
+      return {
+        ...l,
+        id: idStr,
+        _id: l._id.toString(),
+        sessionId: idStr
+      };
+    });
   },
 
   async clearLoginHistory(): Promise<void> {

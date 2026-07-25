@@ -863,7 +863,7 @@ export async function forceLogoutSession(sessionId: string) {
 export async function getLoginSessions() {
   try {
     const result = await adminService.getLoginSessions();
-    if (Array.isArray(result) && result.length > 0) {
+    if (Array.isArray(result)) {
       return JSON.parse(JSON.stringify(result));
     }
   } catch (e) {

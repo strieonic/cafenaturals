@@ -90,22 +90,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem('cafe_blossom_auth', JSON.stringify(parsed));
         }
 
-        const tabSessionId = sessionStorage.getItem(TAB_SESSION_KEY);
-        if (tabSessionId) {
-          parsed.sessionId = tabSessionId;
+        let activeSessionId = sessionStorage.getItem(TAB_SESSION_KEY) || parsed.sessionId;
+        if (activeSessionId) {
+          sessionStorage.setItem(TAB_SESSION_KEY, activeSessionId);
+          parsed.sessionId = activeSessionId;
         }
 
         setUser(parsed);
 
-        // If tab has no distinct session ID yet, register a new active session for this tab/window
-        const existingTabId = sessionStorage.getItem(TAB_SESSION_KEY);
-        if (!existingTabId && isAdminRoute) {
+        // If no active session ID exists yet, register one now
+        if (!activeSessionId && isAdminRoute) {
           (async () => {
             try {
               const deviceInfo = getDeviceInfo();
               const createdId = await recordLoginSession(deviceInfo, 'Local Staff Device');
               if (createdId) {
                 sessionStorage.setItem(TAB_SESSION_KEY, createdId);
+                parsed.sessionId = createdId;
+                localStorage.setItem('cafe_blossom_auth', JSON.stringify(parsed));
                 setUser(prev => prev ? { ...prev, sessionId: createdId } : null);
               }
             } catch (err) {
