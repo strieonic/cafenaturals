@@ -926,7 +926,7 @@ export default function InventoryExpensesPage() {
                   </h2>
                   <p className="text-xs text-muted-foreground font-sans mt-0.5">
                     {!isTodayOpen 
-                      ? "Start the day by entering the opening cash balance."
+                      ? "Start the day. Optionally enter the opening cash balance in the till."
                       : "Generate the end of day financial closure. Make sure all guest orders are closed before finalizing."}
                   </p>
                 </div>
@@ -938,16 +938,19 @@ export default function InventoryExpensesPage() {
                 ) : !isTodayOpen ? (
                   <form onSubmit={handleOpenDay} className="space-y-4 font-sans text-sm">
                     <div className="bg-muted/40 border border-border/75 rounded-xl p-4 space-y-3">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">Opening Cash Balance (₹)</label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">Opening Cash Balance (₹)</label>
+                        <span className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider border border-border/60 rounded-full px-2 py-0.5">Optional</span>
+                      </div>
                       <input
                         type="number"
                         min="0"
                         value={openingCash || ''}
                         onChange={(e) => setOpeningCash(Number(e.target.value))}
                         className="w-full px-4 py-2.5 rounded-xl border border-border bg-background focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
-                        placeholder="0"
-                        required
+                        placeholder="e.g. 500 (leave blank if not counted)"
                       />
+                      <p className="text-[10px] text-muted-foreground/70">Leave blank to open with ₹0 balance.</p>
                     </div>
                     <button
                       type="submit"

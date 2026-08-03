@@ -80,14 +80,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [updateActivity]);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('cafe_blossom_auth');
+    const storedUser = sessionStorage.getItem('cafe_blossom_auth');
     if (storedUser) {
       try {
         const parsed = JSON.parse(storedUser);
         
         if (!parsed.loginAt) {
           parsed.loginAt = Date.now();
-          localStorage.setItem('cafe_blossom_auth', JSON.stringify(parsed));
+          sessionStorage.setItem('cafe_blossom_auth', JSON.stringify(parsed));
         }
 
         let activeSessionId = sessionStorage.getItem(TAB_SESSION_KEY) || parsed.sessionId;
@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               if (createdId) {
                 sessionStorage.setItem(TAB_SESSION_KEY, createdId);
                 parsed.sessionId = createdId;
-                localStorage.setItem('cafe_blossom_auth', JSON.stringify(parsed));
+                sessionStorage.setItem('cafe_blossom_auth', JSON.stringify(parsed));
                 setUser(prev => prev ? { ...prev, sessionId: createdId } : null);
               }
             } catch (err) {
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.push('/admin');
         }
       } catch (e) {
-        localStorage.removeItem('cafe_blossom_auth');
+        sessionStorage.removeItem('cafe_blossom_auth');
         sessionStorage.removeItem(TAB_SESSION_KEY);
         setUser(null);
         if (isAdminRoute || pathname === '/login') {
@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const checkHeartbeat = async () => {
       const tabSessionId = sessionStorage.getItem(TAB_SESSION_KEY);
-      const storedUser = localStorage.getItem('cafe_blossom_auth');
+      const storedUser = sessionStorage.getItem('cafe_blossom_auth');
       let targetId = tabSessionId;
       if (!targetId && storedUser) {
         try { targetId = JSON.parse(storedUser)?.sessionId; } catch {}
@@ -154,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const res = await sendSessionHeartbeat(targetId);
         if (res?.forceLogout) {
           sessionStorage.removeItem(TAB_SESSION_KEY);
-          localStorage.removeItem('cafe_blossom_auth');
+          sessionStorage.removeItem('cafe_blossom_auth');
           setUser(null);
           setShowForceLogoutModal(true);
         }
@@ -170,7 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     const tabSessionId = sessionStorage.getItem(TAB_SESSION_KEY);
-    const storedUser = localStorage.getItem('cafe_blossom_auth');
+    const storedUser = sessionStorage.getItem('cafe_blossom_auth');
     let targetId = tabSessionId;
     if (!targetId && storedUser) {
       try { targetId = JSON.parse(storedUser)?.sessionId; } catch {}
@@ -183,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     sessionStorage.removeItem(TAB_SESSION_KEY);
-    localStorage.removeItem('cafe_blossom_auth');
+    sessionStorage.removeItem('cafe_blossom_auth');
     setUser(null);
     router.push('/login');
   }, [router]);
@@ -238,7 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const loggedInUser = { email: 'staff@cafenaturaleza.com', loginAt: Date.now(), sessionId };
-      localStorage.setItem('cafe_blossom_auth', JSON.stringify(loggedInUser));
+      sessionStorage.setItem('cafe_blossom_auth', JSON.stringify(loggedInUser));
       setUser(loggedInUser);
       router.push('/admin');
       return { error: null };
